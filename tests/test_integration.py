@@ -18,6 +18,8 @@ incomplete_date_csv = os.path.join(test_data, 'negative_incomplete_date_soccer_s
 
 # DB related parameters
 test_config = os.path.join(test_dir, 'config', 'test_config.ini')
+wrong_dsn_test_config = os.path.join(test_dir, 'config', 'fake_dsn_test_config.ini')
+wrong_creds_test_config = os.path.join(test_dir, 'config', 'fake_creds_test_config.ini')
 
 
 def compare_output_with_csv_data(csv_data, output, year, month):
@@ -100,3 +102,19 @@ def test_import_incomplete_date():
                           fields={'MATCH_DATE': 'DATE', 'Home': 'DECIMAL(4,0)', 'Visitor': 'DECIMAL(4,0)'},
                           cfg_path=test_config)
     assert "Transformation of value='2020-10-' failed - invalid value for DD format token" in str(ex.value)
+
+
+def test_incorrect_db_address():
+    with pytest.raises(pyexasol.exceptions.ExaConnectionDsnError) as ex:
+        assert import_csv(csv_file=correct_csv,
+                          fields={'MATCH_DATE': 'DATE', 'Home': 'DECIMAL(4,0)', 'Visitor': 'DECIMAL(4,0)'},
+                          cfg_path=wrong_dsn_test_config)
+    assert "Could not resolve IP address of host" in str(ex.value)
+
+
+def test_incorrect_db_creds():
+    with pytest.raises(pyexasol.exceptions.ExaAuthError) as ex:
+        assert import_csv(csv_file=correct_csv,
+                          fields={'MATCH_DATE': 'DATE', 'Home': 'DECIMAL(4,0)', 'Visitor': 'DECIMAL(4,0)'},
+                          cfg_path=wrong_creds_test_config)
+    assert "Connection exception - authentication failed." in str(ex.value)

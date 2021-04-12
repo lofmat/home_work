@@ -11,7 +11,7 @@ Fetch/load matches score
 #HOWTO start tests
 1. cd home_work
 2. export PYTHONPATH=$(pwd)
-3. python3.9 -m pytest -s
+3. python3.9 -m pytest -s -v
 
 #NOTE 
 Script tested on the following environment:

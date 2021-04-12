@@ -42,7 +42,7 @@ def test_valid_path_incorrect_value(path):
     assert f"No such path: '{path}'." in str(ex.value)
 
 
-@pytest.mark.parametrize("data", [])
+@pytest.mark.parametrize("data", [[], ])
 def test_data_formatting_empty_dataset(data):
     assert len(format_matches_data(data)) == 0
 
