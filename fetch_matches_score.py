@@ -36,8 +36,7 @@ def valid_month(m: str) -> str:
     if re.match(r'0[1-9]|1[0-2]', m):
         return m
     else:
-        msg = f"Incorrect month format: '{m}'." \
-              f"Should be MM"
+        msg = f"Parameter 'month' should have the following format -> 'MM' but has -> '{m}'."
         raise ArgumentTypeError(msg)
 
 
@@ -46,8 +45,7 @@ def valid_year(y: str) -> str:
     if re.match(r'[1-3][0-9]{3}$', y):
         return y
     else:
-        msg = f"Incorrect year format: '{y}'." \
-              f"Should be YYYY"
+        msg = f"Parameter 'month' should have the following format -> 'YYYY' but has -> '{y}'."
         raise ArgumentTypeError(msg)
 
 
@@ -67,7 +65,7 @@ def create_parser() -> ArgumentParser:
                                  help="Year number e.g. 1994",
                                  type=valid_year)
     optional_params.add_argument("-s", "--source_csv",
-                                 help="",
+                                 help="CSV file abs path to load data to DB",
                                  type=valid_path)
     return ap
 
@@ -78,10 +76,19 @@ def import_csv(csv_file: str, fields: dict, cfg_path: str) -> None:
     config.read(cfg_path)
     with get_exasol_conn(cfg=cfg_path) as conn:
         conn.open_schema(config['DB_CONFIG']['schema'])
+        # Convert dict {'column1':'type1', 'column2': 'type2'}
+        # to string 'column1 type1, column2 type2'
         fields_str = ', '.join(f"{key} {val}" for (key, val) in fields.items())
-        create_table_query = f"CREATE TABLE {config['DB_CONFIG']['table']} ({fields_str})"
+        create_table_query = f"CREATE TABLE IF NOT EXISTS {config['DB_CONFIG']['table']} ({fields_str})"
         conn.execute(create_table_query)
+        # Cleanup the table to be sure that the table after loading will contain correct dataset
+        conn.execute(f"TRUNCATE TABLE {config['DB_CONFIG']['table']}")
+        # Import data from csv to db
         conn.import_from_file(csv_file, f"{config['DB_CONFIG']['table']}")
+        # Check result
+        stmt = conn.last_statement()
+        logging.info(f'IMPORTED {stmt.rowcount()} rows in {stmt.execution_time}s')
+        logging.info(f'Source file is {csv_file}')
 
 
 # Get matches data
@@ -90,10 +97,27 @@ def fetch_match_data_by_date(month: str, year: str, cfg_path: str, date_column_n
     config.read(cfg_path)
     with get_exasol_conn(cfg=cfg_path) as conn:
         conn.open_schema(config['DB_CONFIG']['schema'])
+        # Select matches data where column with date contains date that starts with 'year-month-'
         stmt = conn.execute(f"SELECT *  FROM "
                             f"{config['DB_CONFIG']['schema']}.{config['DB_CONFIG']['table']}"
                             f" WHERE {date_column_name} LIKE '{year}-{month}-%'")
+    # Will be returned list of tuples like ('2020-10-17', 1, 2)
     return stmt.fetchall()
+
+
+def format_matches_data(data: list) -> list:
+    formatted_data = []
+    for match in data:
+        # Unpack tuple such as ('2020-10-11', 0, 0)
+        d, h, v = match
+        # Check if home and visitor goals count exist in the table and have
+        # correct format
+        score_regex = re.compile(r'^(?:[1-9][0-9]{3}|[1-9][0-9]{2}|[1-9][0-9]|[0-9])$')
+        # ('2020-10-17', 1, 2) -> '2020-10-17, 1:2'
+        formatted_data.append(f"{d}"
+                              f", {h if score_regex.match(str(h)) else None}"
+                              f":{v if score_regex.match(str(v)) else None}")
+    return formatted_data
 
 
 if __name__ == '__main__':
@@ -109,21 +133,17 @@ if __name__ == '__main__':
         import_csv(csv_file=args['source_csv'],
                    fields={'MATCH_DATE': 'DATE', 'Home': 'DECIMAL(4,0)', 'Visitor': 'DECIMAL(4,0)'},
                    cfg_path=default_cfg)
-        logging.info(f"Has been loaded data from file -> {args['source_csv']}")
     # Fetch data from table
     matches_data = fetch_match_data_by_date(month=args['month'],
                                             year=args['year'],
                                             cfg_path=default_cfg,
                                             date_column_name='MATCH_DATE')
-    if len(matches_data):
+    if len(matches_data) > 0:
         print('Date, Home:Visitors')
-        for match in matches_data:
-            d, h, v = match
-            # Check if home and visitor goals count exist in the table and have
-            # correct format
-            score_regex = re.compile(r'^(?:[1-9][0-9]{3}|[1-9][0-9]{2}|[1-9][0-9]|[0-9])$')
-            print(f"{d}"
-                  f", {h if score_regex.match(str(h)) else None }"
-                  f":{v if score_regex.match(str(v)) else None}")
+        res = format_matches_data(matches_data)
+        for r in res:
+            print(r)
     else:
-        logging.info(f"There were no matches in such month")
+        logging.warning(f"There were no matches in such month!")
+
+
