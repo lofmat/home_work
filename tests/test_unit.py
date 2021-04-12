@@ -18,16 +18,16 @@ def test_valid_month_incorrect_value(month):
     assert f"Parameter 'month' should have the following format -> 'MM' but has -> '{month}'." in str(ex.value)
 
 
+@pytest.mark.parametrize("year", ['2020', '1000', '3999'])
+def test_valid_year_correct_value(year):
+    assert valid_year(year) == year
+
+
 @pytest.mark.parametrize("year", ['02020', '2o2o', ' ', '0', '4000'])
 def test_valid_year_incorrect_value(year):
     with pytest.raises(ArgumentTypeError) as ex:
         assert valid_year(year)
     assert f"Parameter 'month' should have the following format -> 'YYYY' but has -> '{year}'." in str(ex.value)
-
-
-@pytest.mark.parametrize("year", ['2020', '1000', '3999'])
-def test_valid_year_correct_value(year):
-    assert valid_year(year) == year
 
 
 @pytest.mark.parametrize("path", [os.getcwd()])
@@ -42,6 +42,7 @@ def test_valid_path_incorrect_value(path):
     assert f"No such path: '{path}'." in str(ex.value)
 
 
+# Formatting tests
 @pytest.mark.parametrize("data", [[], ])
 def test_data_formatting_empty_dataset(data):
     assert len(format_matches_data(data)) == 0

@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import contextlib
 
 from argparse import ArgumentParser, ArgumentTypeError
@@ -70,10 +71,29 @@ def create_parser() -> ArgumentParser:
     return ap
 
 
+# Check if cells don't contain any CSV injections
+# https://owasp.org/www-community/attacks/CSV_Injection
+def validate_csv(csv_path: str, delimiter: str) -> bool:
+    if os.path.exists(csv_path):
+        with open(csv_path, 'r') as csv:
+            csv_data = csv.readlines()
+            for line in csv_data:
+                if line.startswith('#'):
+                    continue
+                for cell in line.strip().split(delimiter):
+                    if cell.startswith('=') or cell.startswith('+') or cell.startswith('-') or cell.startswith('@') or \
+                            re.match(r'[ \r]', cell) or re.match(r'[ \t]', cell):
+                        return False
+    return True
+
+
 # Load data to DB from csv file
 def import_csv(csv_file: str, fields: dict, cfg_path: str) -> None:
     # Read ini configuration file
     config.read(cfg_path)
+    if not validate_csv(csv_path=csv_file, delimiter=','):
+        raise Exception(f"CSV file contains insecure constructions "
+                        f"(https://owasp.org/www-community/attacks/CSV_Injection)")
     with get_exasol_conn(cfg=cfg_path) as conn:
         conn.open_schema(config['DB_CONFIG']['schema'])
         # Convert dict {'column1':'type1', 'column2': 'type2'}
@@ -85,7 +105,7 @@ def import_csv(csv_file: str, fields: dict, cfg_path: str) -> None:
         conn.execute(f"TRUNCATE TABLE {config['DB_CONFIG']['table']}")
         # Import data from csv to db
         conn.import_from_file(csv_file, f"{config['DB_CONFIG']['table']}")
-        # Check result
+        # Check resultCould not resolve IP address of host
         stmt = conn.last_statement()
         logging.info(f'IMPORTED {stmt.rowcount()} rows in {stmt.execution_time}s')
         logging.info(f'Source file is {csv_file}')
@@ -120,30 +140,39 @@ def format_matches_data(data: list) -> list:
     return formatted_data
 
 
-if __name__ == '__main__':
+def main(**kwargs):
+    res = []
     # ini config path
     project_root = os.path.dirname(os.path.abspath(__file__))
     default_cfg = os.path.join(project_root, 'config.ini')
     # Create parser
-    parser = create_parser()
-    args = vars(parser.parse_args())
-    logging.info(f"Script arguments -> Month: {args['month']}, Year: {args['year']}.")
+
+    logging.info(f"Script arguments -> Month: {kwargs['month']}, Year: {kwargs['year']}.")
     # Load data if needed
-    if args['source_csv']:
-        import_csv(csv_file=args['source_csv'],
+    if kwargs.get('source_csv'):
+        import_csv(csv_file=kwargs['source_csv'],
                    fields={'MATCH_DATE': 'DATE', 'Home': 'DECIMAL(4,0)', 'Visitor': 'DECIMAL(4,0)'},
                    cfg_path=default_cfg)
     # Fetch data from table
-    matches_data = fetch_match_data_by_date(month=args['month'],
-                                            year=args['year'],
+    matches_data = fetch_match_data_by_date(month=kwargs['month'],
+                                            year=kwargs['year'],
                                             cfg_path=default_cfg,
                                             date_column_name='MATCH_DATE')
+    # Print out the data
     if len(matches_data) > 0:
-        print('Date, Home:Visitors')
+        logging.info('Date, Home:Visitors')
         res = format_matches_data(matches_data)
-        for r in res:
-            print(r)
-    else:
-        logging.warning(f"There were no matches in such month!")
 
+    return res
+
+
+if __name__ == '__main__':
+    parser = create_parser()
+    args = vars(parser.parse_args())
+    out = main(month=args['month'], year=args['year'], source_csv=args['source_csv'])
+    if len(out) > 0:
+        for match in out:
+            print(match)
+    else:
+        logging.warning(f"No matches on such date -> {args['month']} , {args['year']}")
 
