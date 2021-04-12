@@ -1,6 +1,7 @@
-import pytest
 import os
+
 from argparse import ArgumentTypeError
+import pytest
 
 from fetch_matches_score import valid_month, valid_year, valid_path, format_matches_data
 

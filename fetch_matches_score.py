@@ -1,6 +1,5 @@
 import os
 import re
-import sys
 import contextlib
 
 from argparse import ArgumentParser, ArgumentTypeError

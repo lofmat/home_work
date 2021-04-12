@@ -1,7 +1,9 @@
 import os
 import pytest
+
 import pyexasol
 import configparser
+
 from fetch_matches_score import import_csv, fetch_match_data_by_date
 
 config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
@@ -22,6 +24,7 @@ test_config = os.path.join(test_dir, 'config', 'test_config.ini')
 wrong_dsn_test_config = os.path.join(test_dir, 'config', 'fake_dsn_test_config.ini')
 wrong_creds_test_config = os.path.join(test_dir, 'config', 'fake_creds_test_config.ini')
 non_existed_table_config = os.path.join(test_dir, 'config', 'fake_db_table_test_config.ini')
+
 
 # Compare data from csv file and select result
 def compare_output_with_csv_data(csv_data, output, year, month):
