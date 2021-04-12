@@ -1,4 +1,4 @@
-# home_work
+# Home work
 Fetch/load matches score
 
 ## HOWTO run app
